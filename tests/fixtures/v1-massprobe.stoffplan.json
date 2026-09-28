@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "beispiel-massprobe",
+  "name": "Maßprobe · zwei Rechtecke",
+  "unit": "mm",
+  "fabric": { "mode": "auto", "width": 1000, "length": 2000, "seam": 10, "reserve": 20, "gap": 5 },
+  "parts": [
+    {
+      "id": "grundteil",
+      "name": "Grundteil",
+      "quantity": 2,
+      "contour": {
+        "closed": true,
+        "nodes": [
+          { "x": 0, "y": 0 },
+          { "x": 400, "y": 0 },
+          { "x": 400, "y": 600 },
+          { "x": 0, "y": 600 }
+        ]
+      },
+      "grain": { "start": { "x": 100, "y": 120 }, "end": { "x": 100, "y": 480 } },
+      "direction": "straight",
+      "mirrored": false
+    }
+  ],
+  "placements": [
+    { "instanceId": "grundteil:0", "partId": "grundteil", "x": 20, "y": 20, "flipped": false },
+    { "instanceId": "grundteil:1", "partId": "grundteil", "x": 445, "y": 20, "flipped": false }
+  ],
+  "layoutSource": "optimized",
+  "updatedAt": "2026-09-28T00:00:00.000Z"
+}
