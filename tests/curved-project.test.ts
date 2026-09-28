@@ -53,7 +53,7 @@ it.each([0, 5])(
     const curves = result.placements.filter((p) => p.partId === project.parts[1].id);
     const overlapping = result.placements.map((p) =>
       p.instanceId === curves[1].instanceId
-        ? { ...p, x: curves[0].x, y: curves[0].y, flipped: curves[0].flipped }
+        ? { ...p, x: curves[0].x, y: curves[0].y, rotation: curves[0].rotation }
         : p,
     );
     expect(validate(project, overlapping).violations.some((v) => v.code === 'overlap')).toBe(true);

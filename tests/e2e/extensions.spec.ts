@@ -49,7 +49,7 @@ test('Kreis, Oval, Farbe und Winkelvorgaben bleiben maßhaltig und speicherbar',
     '#d23f8090',
   );
   const saved = await save(page);
-  expect(saved.schemaVersion).toBe(2);
+  expect(saved.schemaVersion).toBe(3);
   expect(saved.parts[0].contour.primitive).toMatchObject({ kind: 'circle', rx: 127, ry: 127 });
   expect(saved.parts[0].color).toBe('#d23f80');
   expect(saved.parts[0].grain.end.x).toBe(180);
@@ -196,7 +196,7 @@ test('gespeicherte ungültige Varianten werden mit Hinweis verworfen', async ({ 
       id: 'outside',
       strategy: 'rows',
       placements: [
-        { partId: part.id, instanceId: instanceId(part.id, 0), x: 300, y: 0, flipped: false },
+        { partId: part.id, instanceId: instanceId(part.id, 0), x: 300, y: 0, rotation: 0 as const },
       ],
     },
   ];

@@ -53,7 +53,7 @@ describe('Konturen und Anordnung', () => {
       partId: part.id,
       x: 20 + i * 425,
       y: 0,
-      flipped: false,
+      rotation: 0 as const,
     }));
     expect(validate(p).status).toBe('valid');
     expect(validate(p).requiredLength).toBe(620);
@@ -92,7 +92,7 @@ describe('Konturen und Anordnung', () => {
       partId: part.id,
       x: i * 100,
       y: 0,
-      flipped: false,
+      rotation: 0 as const,
     }));
     expect(validate(p).status).toBe('valid');
     p.placements[1].x -= 0.001;
@@ -112,7 +112,7 @@ describe('Konturen und Anordnung', () => {
     }));
     expect(shapeOf(rotated, 0).width).toBeCloseTo(100, 5);
     expect(shapeOf({ ...rotated, direction: 'cross' }, 0).width).toBeCloseTo(200, 5);
-    const s = shapeOf(rotated, 0, true);
+    const s = shapeOf(rotated, 0, 180);
     expect(Math.abs(s.grain.start.x - s.grain.end.x)).toBeLessThan(0.00001);
   });
   it('spiegelt Form und Bezugslinie unabhängig', () => {
@@ -161,7 +161,7 @@ describe('Konturen und Anordnung', () => {
       const s = shapeOf(
         p.parts.find((part) => part.id === q.partId)!,
         0,
-        q.flipped,
+        q.rotation,
       );
       return bounds(translate(s.cut, q.x, q.y));
     });
@@ -182,7 +182,7 @@ describe('Konturen und Anordnung', () => {
     p.fabric.width = 200;
     p.parts = [part];
     p.placements = [
-      { instanceId: instanceId(part.id, 0), partId: part.id, x: 0, y: 0, flipped: false },
+      { instanceId: instanceId(part.id, 0), partId: part.id, x: 0, y: 0, rotation: 0 as const },
     ];
     expect(validate(p).status).toBe('invalid');
     p.placements[0].x = 0.02;
@@ -217,7 +217,13 @@ describe('Konturen und Anordnung', () => {
     expect(validate(p).violations.some((v) => v.code === 'width')).toBe(true);
     p.fabric.width = 1000;
     const id = p.parts[0].id;
-    const placement = { partId: id, instanceId: instanceId(id, 0), x: 20, y: 20, flipped: false };
+    const placement = {
+      partId: id,
+      instanceId: instanceId(id, 0),
+      x: 20,
+      y: 20,
+      rotation: 0 as const,
+    };
     p.placements = [placement, { ...placement, x: 500 }];
     expect(validate(p).violations.some((v) => v.code === 'instance')).toBe(true);
     expect(validate(p).missing[0].count).toBe(1);
@@ -234,7 +240,7 @@ describe('Projektdateien', () => {
         partId: p.parts[0].id,
         x: 38.1,
         y: 22.05,
-        flipped: true,
+        rotation: 180 as const,
       },
     ];
     expect(parseProject(serializeProject(p))).toEqual(p);

@@ -100,7 +100,7 @@ describe('Nullpunkt und seitliche Reserve', () => {
     p.parts = [part];
     p.fabric = { ...p.fabric, width: 140, length: 30, reserve: 20, mode: 'fixed' };
     p.placements = [
-      { partId: part.id, instanceId: instanceId(part.id, 0), x: 20, y: 0, flipped: false },
+      { partId: part.id, instanceId: instanceId(part.id, 0), x: 20, y: 0, rotation: 0 as const },
     ];
     expect(fabricErrors(p)).toEqual([]);
     expect(validate(p).status).toBe('valid');
@@ -125,8 +125,8 @@ function variantFixture() {
   project.parts = [part];
   project.fabric.width = 100;
   const positions = (x = 0, y = 50): Placement[] => [
-    { partId: part.id, instanceId: instanceId(part.id, 0), x: 0, y: 0, flipped: false },
-    { partId: part.id, instanceId: instanceId(part.id, 1), x, y, flipped: false },
+    { partId: part.id, instanceId: instanceId(part.id, 0), x: 0, y: 0, rotation: 0 as const },
+    { partId: part.id, instanceId: instanceId(part.id, 1), x, y, rotation: 0 as const },
   ];
   return { project, positions };
 }
@@ -162,7 +162,7 @@ describe('Varianten und Migration', () => {
     const exchanged = original.map((p, i) => ({
       ...p,
       instanceId: original[1 - i].instanceId,
-      flipped: true,
+      rotation: 180 as const,
     }));
     expect(layoutFingerprint(project, original)).toBe(layoutFingerprint(project, exchanged));
     pool.add(original, 'compact');
@@ -195,9 +195,14 @@ describe('Varianten und Migration', () => {
   it('migriert alte Dateien ohne Platzierungsverschiebung und bewahrt freie Bezugslinien', () => {
     const legacy = JSON.parse(readFileSync('tests/fixtures/v1-massprobe.stoffplan.json', 'utf8'));
     const p = parseProject(JSON.stringify(legacy));
-    expect(p.schemaVersion).toBe(2);
+    expect(p.schemaVersion).toBe(3);
     expect(p.variants).toEqual([]);
-    expect(p.placements).toEqual(legacy.placements);
+    expect(p.placements).toEqual(
+      legacy.placements.map(({ flipped, ...placement }: { flipped: boolean }) => ({
+        ...placement,
+        rotation: flipped ? 180 : 0,
+      })),
+    );
     expect(p.parts[0].grain).toEqual(legacy.parts[0].grain);
     expect(p.parts[0].color).toBe(COLORS[0]);
   });

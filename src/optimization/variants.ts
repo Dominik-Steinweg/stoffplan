@@ -17,30 +17,29 @@ export const STRATEGY_LABELS: Record<LayoutStrategy, string> = {
 
 /** Canonicalize occupied geometry, not interchangeable instance numbers. */
 export function layoutFingerprint(project: Project, placements: Placement[]): string {
-  const orientations = new Map<string, boolean>();
+  const signatures = new Map<string, string>();
   const rounded = (n: number) => Math.round(n * 1000);
-  const symmetric = (partId: string) => {
-    if (!orientations.has(partId)) {
-      const part = project.parts.find((p) => p.id === partId)!;
-      const signature = (flipped: boolean) =>
-        shapeOf(part, project.fabric.seam, flipped)
+  const signature = (placement: Placement) => {
+    const key = placement.partId + ':' + placement.rotation;
+    if (!signatures.has(key)) {
+      const part = project.parts.find((p) => p.id === placement.partId)!;
+      signatures.set(
+        key,
+        shapeOf(part, project.fabric.seam, placement.rotation)
           .cut.map((poly) =>
             poly
-              .map((p) => `${rounded(p.x)},${rounded(p.y)}`)
+              .map((p) => rounded(p.x) + ',' + rounded(p.y))
               .sort()
               .join(';'),
           )
           .sort()
-          .join('|');
-      orientations.set(partId, signature(false) === signature(true));
+          .join('|'),
+      );
     }
-    return orientations.get(partId);
+    return signatures.get(key);
   };
   return placements
-    .map(
-      (p) =>
-        `${p.partId}:${rounded(p.x)},${rounded(p.y)},${symmetric(p.partId) ? 0 : Number(p.flipped)}`,
-    )
+    .map((p) => p.partId + ':' + rounded(p.x) + ',' + rounded(p.y) + ',' + signature(p))
     .sort()
     .join('|');
 }

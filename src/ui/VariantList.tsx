@@ -44,7 +44,7 @@ export function VariantList({
             />
             {variant.placements.map((placement) => {
               const part = project.parts.find((p) => p.id === placement.partId)!;
-              const shape = shapeOf(part, project.fabric.seam, placement.flipped);
+              const shape = shapeOf(part, project.fabric.seam, placement.rotation);
               return (
                 <path
                   key={placement.instanceId}

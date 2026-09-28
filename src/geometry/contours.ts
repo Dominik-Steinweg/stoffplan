@@ -1,4 +1,5 @@
-import type { Contour, PartDefinition, Point } from '../domain/types';
+import type { Contour, PartDefinition, Point, Rotation } from '../domain/types';
+import { allowedRotations } from '../domain/types';
 import { area, bounds, offset, positive, translate, type Polygon } from './kernel';
 
 export const EPS = 0.000002;
@@ -143,10 +144,12 @@ const cache = new Map<string, Shape>();
 export function shapeOf(
   part: PartDefinition,
   seam: number,
-  flipped = false,
+  rotation: Rotation = 0,
   tolerance = 0.002,
 ): Shape {
-  const key = JSON.stringify([part.contour, part.grain, part.direction, seam, flipped, tolerance]);
+  if (!allowedRotations(part).includes(rotation))
+    throw new Error('Unzulässige Drehung für diese Stoffrichtung.');
+  const key = JSON.stringify([part.contour, part.grain, part.direction, seam, rotation, tolerance]);
   const cached = cache.get(key);
   if (cached) return cached;
   const raw = flatten(part.contour, tolerance),
@@ -156,9 +159,9 @@ export function shapeOf(
     dy = part.grain.end.y - part.grain.start.y;
   if (Math.hypot(dx, dy) < EPS) throw new Error('Die Bezugslinie muss eine Richtung haben.');
   const angle =
-    (part.direction === 'straight' ? Math.PI / 2 : 0) -
+    (part.direction === 'cross' ? 0 : Math.PI / 2) -
     Math.atan2(dy, dx) +
-    (flipped ? Math.PI : 0);
+    (rotation * Math.PI) / 180;
   const cos = Math.cos(angle),
     sin = Math.sin(angle);
   const rotate = (p: Point): Point => ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos });

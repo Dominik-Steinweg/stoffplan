@@ -408,8 +408,12 @@ export function PartInspector({
         >
           <option value="straight">Straight-Grain · längs</option>
           <option value="cross">Cross-Grain · quer</option>
+          <option value="either">Egal · längs oder quer</option>
         </select>
       </label>
+      {part.direction === 'either' && (
+        <p className="help">Bezugslinie längs oder quer zur Stoffbahn; Drehung in 90°-Schritten.</p>
+      )}
       <div className="field">
         <span>Winkel der Bezugslinie</span>
         <div className="segmented grain-presets">

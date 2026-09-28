@@ -543,18 +543,20 @@ details .field {
   background: #eef1eb;
 }
 .workspace-toolbar {
-  height: 60px;
+  min-height: 60px;
+  flex-wrap: wrap;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--line);
   background: #f6f8f1;
   gap: 8px;
 }
 .view-tools {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   font-size: 10px;
@@ -1096,7 +1098,7 @@ details .field {
     min-width: 205px;
   }
   .workspace-toolbar {
-    padding: 0 10px;
+    padding: 10px;
   }
   .view-tools {
     gap: 5px;

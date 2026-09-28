@@ -18,16 +18,20 @@ export interface PartDefinition {
   quantity: number;
   contour: Contour;
   grain: { start: Point; end: Point };
-  direction: 'straight' | 'cross';
+  direction: 'straight' | 'cross' | 'either';
   mirrored: boolean;
   color: string;
 }
+export type Rotation = 0 | 90 | 180 | 270;
+export const allowedRotations = (part: PartDefinition): readonly Rotation[] =>
+  part.direction === 'either' ? [0, 90, 180, 270] : [0, 180];
+
 export interface Placement {
   instanceId: string;
   partId: string;
   x: number;
   y: number;
-  flipped: boolean;
+  rotation: Rotation;
 }
 export type LayoutStrategy = 'compact' | 'rows' | 'grouped';
 export interface LayoutVariant {
@@ -39,7 +43,7 @@ export interface CheckedVariant extends LayoutVariant {
   report: ValidationReport;
 }
 export interface Project {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: string;
   name: string;
   unit: Unit;

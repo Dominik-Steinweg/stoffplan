@@ -5,8 +5,9 @@ import type {
   Placement,
   Point,
   LayoutStrategy,
+  Rotation,
 } from '../domain/types';
-import { instanceId } from '../domain/types';
+import { allowedRotations, instanceId } from '../domain/types';
 import { minkowskiObstacle, offset, translate, union, type Polygon } from '../geometry/kernel';
 import { EPS, shapeOf, type Shape } from '../geometry/contours';
 import { fabricErrors, pairIssue, validate, type Located } from '../geometry/validation';
@@ -102,28 +103,37 @@ export async function optimize(
   }
   const prepared = new Map<string, Prepared>(),
     nfps = new Map<string, Polygon[]>();
-  const prepare = (part: PartDefinition, flipped: boolean): Prepared => {
-    const key = `${part.id}:${flipped}`;
+  const prepare = (part: PartDefinition, rotation: Rotation): Prepared => {
+    const key = `${part.id}:${rotation}`;
     const old = prepared.get(key);
     if (old) return old;
-    const shape = shapeOf(part, f.seam, flipped);
+    const shape = shapeOf(part, f.seam, rotation);
     const clearance = shape.curved ? 0.012 : 0;
     const { polygons: search, allowance } = searchContour(shape.cut);
     const value = { shape, search, key, clearance, allowance };
     prepared.set(key, value);
     return value;
   };
+  const fittingRotations = (part: PartDefinition) =>
+    allowedRotations(part).filter((rotation) => {
+      const p = prepare(part, rotation);
+      return p.shape.width + 2 * p.clearance <= f.width - 2 * f.reserve + EPS;
+    });
+  const initialRotation = (part: PartDefinition): Rotation =>
+    fittingRotations(part).sort(
+      (a, b) => prepare(part, a).shape.height - prepare(part, b).shape.height,
+    )[0] ?? 0;
   const items: Item[] = [];
   for (const part of project.parts) {
     try {
-      if (prepare(part, false).shape.width <= f.width - 2 * f.reserve + EPS)
+      if (fittingRotations(part).length)
         for (let i = 0; i < part.quantity; i++) items.push({ part, id: instanceId(part.id, i) });
     } catch {
       /* Invalid contours remain in the report and missing list. */
     }
   }
   const upperLength = items.reduce(
-    (sum, item) => sum + prepare(item.part, false).shape.height + f.gap + 0.03,
+    (sum, item) => sum + prepare(item.part, initialRotation(item.part)).shape.height + f.gap + 0.03,
     0,
   );
   const maxLength = f.mode === 'fixed' ? f.length : upperLength;
@@ -164,7 +174,7 @@ export async function optimize(
   const stacked: Placement[] = [];
   let y = 0;
   for (const item of items) {
-    const p = prepare(item.part, false);
+    const p = prepare(item.part, initialRotation(item.part));
     const margin = p.clearance;
     if (p.shape.width + 2 * margin > f.width - 2 * f.reserve + EPS) continue;
     if (y + p.shape.height + margin <= maxLength + EPS) {
@@ -173,7 +183,7 @@ export async function optimize(
         partId: item.part.id,
         x: f.reserve + margin,
         y: y + margin,
-        flipped: false,
+        rotation: initialRotation(item.part),
       });
       y += p.shape.height + f.gap + margin * 2;
     }
@@ -190,7 +200,7 @@ export async function optimize(
       rowHeight = 0,
       previous = '';
     for (const item of order) {
-      const p = prepare(item.part, false),
+      const p = prepare(item.part, initialRotation(item.part)),
         margin = p.clearance;
       const width = p.shape.width + 2 * margin,
         height = p.shape.height + 2 * margin;
@@ -210,7 +220,7 @@ export async function optimize(
         partId: item.part.id,
         x: x + margin,
         y: top + margin,
-        flipped: false,
+        rotation: initialRotation(item.part),
       });
       x += width + f.gap;
       rowHeight = Math.max(rowHeight, height);
@@ -220,7 +230,9 @@ export async function optimize(
   };
   rows(
     [...items].sort(
-      (a, b) => prepare(b.part, false).shape.height - prepare(a.part, false).shape.height,
+      (a, b) =>
+        prepare(b.part, initialRotation(b.part)).shape.height -
+        prepare(a.part, initialRotation(a.part)).shape.height,
     ),
     'rows',
   );
@@ -243,13 +255,15 @@ export async function optimize(
     const order = [...items];
     if (iterations === 0)
       order.sort((a, b) => {
-        const aa = prepare(a.part, false).shape,
-          bb = prepare(b.part, false).shape;
+        const aa = prepare(a.part, initialRotation(a.part)).shape,
+          bb = prepare(b.part, initialRotation(b.part)).shape;
         return bb.width * bb.height - aa.width * aa.height;
       });
     else if (iterations === 1)
       order.sort(
-        (a, b) => prepare(b.part, false).shape.height - prepare(a.part, false).shape.height,
+        (a, b) =>
+          prepare(b.part, initialRotation(b.part)).shape.height -
+          prepare(a.part, initialRotation(a.part)).shape.height,
       );
     else
       for (let i = order.length - 1; i > 0; i--) {
@@ -261,9 +275,11 @@ export async function optimize(
       if (expired()) break;
       let choice: (Located & { prepared: Prepared }) | undefined;
       let score = Infinity;
-      for (const flipped of iterations > 1 && random() < 0.5 ? [true, false] : [false, true]) {
+      const rotations = [...allowedRotations(item.part)];
+      if (iterations > 1 && random() < 0.5) rotations.reverse();
+      for (const rotation of rotations) {
         if (expired()) break;
-        const p = prepare(item.part, flipped),
+        const p = prepare(item.part, rotation),
           s = p.shape,
           r = f.reserve + p.clearance;
         if (s.width > f.width - 2 * r + EPS) continue;
@@ -288,7 +304,7 @@ export async function optimize(
             partId: item.part.id,
             x: point.x,
             y: point.y,
-            flipped,
+            rotation,
           };
           const located = {
             placement,

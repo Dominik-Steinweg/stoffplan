@@ -2,6 +2,7 @@ import { useRef, useState, type PointerEvent } from 'react';
 import type { Placement, Project, ValidationReport } from '../domain/types';
 import { measureLabel } from '../domain/units';
 import { polygonPath } from '../geometry/kernel';
+import { createMagneticSnap, MAGNET_RADIUS_PX } from '../geometry/magnetic-snap';
 import { shapeOf } from '../geometry/contours';
 import { Canvas, eventPoint } from './Canvas';
 
@@ -11,45 +12,75 @@ export function LayoutCanvas({
   grid,
   gridStep,
   snap,
+  magnetic,
   selectedId,
   onSelect,
   onPreview,
   onCommit,
   preview,
+  locked,
 }: {
   project: Project;
   report: ValidationReport;
   grid: boolean;
   gridStep: number;
   snap: boolean;
+  magnetic: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onPreview: (p: Placement[] | null) => void;
   onCommit: (p: Placement[]) => void;
   preview: boolean;
+  locked: boolean;
 }) {
   const drag = useRef<{
     start: { x: number; y: number };
     original: Placement;
     list: Placement[];
+    length: number;
+    clientX: number;
+    clientY: number;
+    moved: boolean;
+    magnet: ReturnType<typeof createMagneticSnap> | null;
   } | null>(null);
   const last = useRef<Placement[] | null>(null);
   const [fitTick, setFitTick] = useState(0);
+  const [magnetStatus, setMagnetStatus] = useState('');
   const f = project.fabric,
     width = f.width || 1000,
     length = f.mode === 'fixed' ? f.length : report.requiredLength || 800;
   const invalidIds = new Set(report.violations.flatMap((v) => v.instanceIds));
   function down(e: PointerEvent<SVGGElement>, placement: Placement) {
+    if (e.button !== 0) return;
     e.stopPropagation();
     onSelect(placement.instanceId);
-    if (preview) return;
+    if (locked) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { start: eventPoint(e), original: placement, list: project.placements };
+    let magnet: ReturnType<typeof createMagneticSnap> | null = null;
+    if (magnetic) {
+      try {
+        magnet = createMagneticSnap(project, placement);
+      } catch {
+        /* Invalid contours cannot safely dock. */
+      }
+    }
+    drag.current = {
+      start: eventPoint(e),
+      original: placement,
+      list: project.placements,
+      length,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      moved: false,
+      magnet,
+    };
     last.current = null;
   }
   function move(e: PointerEvent<SVGGElement>) {
     const d = drag.current;
-    if (!d) return;
+    if (!d || locked) return;
+    if (!d.moved && Math.hypot(e.clientX - d.clientX, e.clientY - d.clientY) < 3) return;
+    d.moved = true;
     const point = eventPoint(e);
     let x = d.original.x + point.x - d.start.x,
       y = d.original.y + point.y - d.start.y;
@@ -57,27 +88,50 @@ export function LayoutCanvas({
       x = Math.round(x / gridStep) * gridStep;
       y = Math.round(y / gridStep) * gridStep;
     }
+    if (magnetic) {
+      const matrix = e.currentTarget.ownerSVGElement!.getScreenCTM()!;
+      const result = d.magnet?.(
+        { x: d.original.x + point.x - d.start.x, y: d.original.y + point.y - d.start.y },
+        { x, y },
+        MAGNET_RADIUS_PX / Math.hypot(matrix.a, matrix.b),
+      );
+      if (!result) {
+        setMagnetStatus('Kein konfliktfreier Platz');
+        return;
+      }
+      ({ x, y } = result.point);
+      setMagnetStatus(result.snapped ? 'Magnetisch angedockt' : '');
+    }
     const list = d.list.map((p) => (p.instanceId === d.original.instanceId ? { ...p, x, y } : p));
-    last.current = list;
+    last.current = x !== d.original.x || y !== d.original.y ? list : null;
     onPreview(list);
   }
   function up() {
-    if (last.current) onCommit(last.current);
+    if (last.current && !locked) onCommit(last.current);
     drag.current = null;
     last.current = null;
     onPreview(null);
+    setMagnetStatus('');
   }
   return (
     <Canvas
       extent={{ x: 0, y: 0, width, height: length }}
-      fitKey={`${project.id}-${f.width}-${f.mode}-${fitTick}-${preview ? Math.round(length) : 'current'}`}
+      fitKey={`${project.id}-${f.width}-${f.mode}-${fitTick}-${preview ? Math.round(drag.current?.length ?? length) : 'current'}`}
       grid={grid}
       gridStep={gridStep}
       unit={project.unit}
       footer={
         <>
-          <span className="legend-dot" /> Zuschneidekontur <span className="legend-dash" />{' '}
-          Grundform{' '}
+          {magnetStatus ? (
+            <span role="status" data-testid="magnet-status">
+              {magnetStatus}
+            </span>
+          ) : (
+            <>
+              <span className="legend-dot" /> Zuschneidekontur <span className="legend-dash" />{' '}
+              Grundform
+            </>
+          )}
           <button className="text-button" onClick={() => setFitTick((x) => x + 1)}>
             Gesamte Bahn einpassen
           </button>
@@ -145,7 +199,7 @@ export function LayoutCanvas({
             if (!part) return null;
             let shape;
             try {
-              shape = shapeOf(part, f.seam, placement.flipped);
+              shape = shapeOf(part, f.seam, placement.rotation);
             } catch {
               return null;
             }
@@ -167,6 +221,7 @@ export function LayoutCanvas({
                   drag.current = null;
                   last.current = null;
                   onPreview(null);
+                  setMagnetStatus('');
                 }}
               >
                 <path

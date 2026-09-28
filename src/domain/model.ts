@@ -34,7 +34,7 @@ export function setGrainAngle(part: PartDefinition, degrees: number): PartDefini
 
 export function newProject(): Project {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: uid(),
     name: 'Neues Projekt',
     unit: 'mm',

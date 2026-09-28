@@ -1,5 +1,5 @@
 import type { Placement, Project, ValidationReport, Violation } from '../domain/types';
-import { instanceId } from '../domain/types';
+import { allowedRotations, instanceId } from '../domain/types';
 import { area, bounds, intersection, translate, type Polygon } from './kernel';
 import { EPS, polygonDistance, shapeOf, type Shape } from './contours';
 
@@ -53,7 +53,7 @@ function boundaryIssue(located: Located, project: Project): 'boundary' | 'uncert
 }
 function refine(loc: Located, project: Project): Located {
   const part = project.parts.find((p) => p.id === loc.placement.partId)!;
-  const refined = shapeOf(part, project.fabric.seam, loc.placement.flipped, 0.00005);
+  const refined = shapeOf(part, project.fabric.seam, loc.placement.rotation, 0.00005);
   return {
     ...loc,
     shape: refined,
@@ -82,10 +82,15 @@ export function validate(project: Project, placements = project.placements): Val
   const invalidParts = new Set<string>();
   for (const part of project.parts) {
     try {
-      const shape = shapeOf(part, project.fabric.seam);
+      const shapes = allowedRotations(part).map((rotation) =>
+        shapeOf(part, project.fabric.seam, rotation),
+      );
       if (
-        shape.width - (shape.curved ? 2 * shape.error : 0) >
-        project.fabric.width - 2 * project.fabric.reserve + EPS
+        shapes.every(
+          (shape) =>
+            shape.width - (shape.curved ? 2 * shape.error : 0) >
+            project.fabric.width - 2 * project.fabric.reserve + EPS,
+        )
       )
         violations.push({
           code: 'width',
@@ -115,7 +120,15 @@ export function validate(project: Project, placements = project.placements): Val
     seen.add(placement.instanceId);
     if (invalidParts.has(placement.partId)) continue;
     const part = project.parts.find((p) => p.id === placement.partId)!;
-    const shape = shapeOf(part, project.fabric.seam, placement.flipped);
+    if (!allowedRotations(part).includes(placement.rotation)) {
+      violations.push({
+        code: 'rotation',
+        message: 'Unzulässige Drehung für diese Stoffrichtung.',
+        instanceIds: [placement.instanceId],
+      });
+      continue;
+    }
+    const shape = shapeOf(part, project.fabric.seam, placement.rotation);
     const item = { placement, shape, polygons: translate(shape.cut, placement.x, placement.y) };
     let boundary = boundaryIssue(item, project);
     if (boundary && shape.curved) {

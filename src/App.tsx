@@ -75,6 +75,7 @@ export default function App() {
     [selectedNode, setSelectedNode] = useState(0);
   const [grid, setGrid] = useState(true),
     [snap, setSnap] = useState(false),
+    [magnetic, setMagnetic] = useState(false),
     [gridStep, setGridStep] = useState(25);
   const [dragPreview, setDragPreview] = useState<Placement[] | null>(null);
   const [result, setResult] = useState<OptimizationResult | null>(null),
@@ -227,13 +228,19 @@ export default function App() {
     commit((p) => ({
       ...p,
       parts: p.parts.map((old) => (old.id === part.id ? part : old)),
-      placements: p.placements.filter(
-        (q) =>
-          q.partId !== part.id ||
-          Array.from({ length: part.quantity }, (_, i) => instanceId(part.id, i)).includes(
-            q.instanceId,
-          ),
-      ),
+      placements: p.placements
+        .map((q) =>
+          q.partId === part.id && part.direction !== 'either'
+            ? { ...q, rotation: q.rotation >= 180 ? (180 as const) : (0 as const) }
+            : q,
+        )
+        .filter(
+          (q) =>
+            q.partId !== part.id ||
+            Array.from({ length: part.quantity }, (_, i) => instanceId(part.id, i)).includes(
+              q.instanceId,
+            ),
+        ),
     }));
   }
   function addPart(kind: PartKind) {
@@ -269,7 +276,7 @@ export default function App() {
     setSelectedId(null);
   }
   function changePlacement(patch: Partial<Placement>) {
-    if (!selectedPlacement || previewing) return;
+    if (!selectedPlacement || previewing || running) return;
     commit((p) => ({
       ...p,
       layoutSource: 'manual',
@@ -294,7 +301,7 @@ export default function App() {
       instanceId: instanceId(partId, index),
       x: project.fabric.reserve + clearance,
       y: clearance,
-      flipped: false,
+      rotation: 0 as const,
     };
     commit((p) => ({ ...p, layoutSource: 'manual', placements: [...p.placements, placement] }));
     setSelectedId(placement.instanceId);
@@ -605,7 +612,11 @@ export default function App() {
                     <span className="part-description">
                       <strong>{part.name || 'Unbenanntes Teil'}</strong>
                       <small>
-                        {part.direction === 'straight' ? 'Längs' : 'Quer'}
+                        {part.direction === 'straight'
+                          ? 'Längs'
+                          : part.direction === 'cross'
+                            ? 'Quer'
+                            : 'Längs oder quer'}
                         {part.mirrored ? ' · gespiegelt' : ''}
                       </small>
                     </span>
@@ -686,6 +697,16 @@ export default function App() {
                 <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
                 Einrasten
               </label>
+              {mode === 'layout' && (
+                <label title="An benachbarte Zuschneidekanten andocken; Teileabstand und Stoffgrenzen einhalten. Hat Vorrang vor dem Rasterfang.">
+                  <input
+                    type="checkbox"
+                    checked={magnetic}
+                    onChange={(e) => setMagnetic(e.target.checked)}
+                  />
+                  Magnetisch andocken
+                </label>
+              )}
               <details className="grid-popover">
                 <summary title="Rasterweite einstellen">⚙</summary>
                 <div>
@@ -718,6 +739,7 @@ export default function App() {
                   grid={grid}
                   gridStep={gridStep}
                   snap={snap}
+                  magnetic={magnetic}
                   selectedId={selectedId}
                   onSelect={(id) => {
                     setSelectedId(id);
@@ -725,10 +747,13 @@ export default function App() {
                     if (p) setSelectedPartId(p.partId);
                   }}
                   onPreview={setDragPreview}
-                  onCommit={(placements) =>
-                    commit((p) => ({ ...p, placements, layoutSource: 'manual' }))
-                  }
-                  preview={previewing || running}
+                  onCommit={(placements) => {
+                    commit((p) => ({ ...p, placements, layoutSource: 'manual' }));
+                    setResult(null);
+                    setSelectedVariantId(null);
+                  }}
+                  preview={previewing}
+                  locked={running}
                 />
                 {!total && (
                   <div className="welcome-card">
@@ -873,6 +898,7 @@ export default function App() {
                     {result ? `${result.iterations} Suchdurchläufe · ` : ''}
                     {report.placed} von {report.required} Teilen
                   </p>
+                  {!running && <p>Zum Bearbeiten ein Teil ziehen oder Variante übernehmen.</p>}
                   <button className="primary full" onClick={applyResult} disabled={running}>
                     {report.status === 'valid'
                       ? 'Variante übernehmen'
@@ -924,7 +950,7 @@ export default function App() {
               {report.status === 'valid' && (
                 <p className="valid-note">✓ Alle Teile, Abstände und Stoffgrenzen geprüft.</p>
               )}
-              {selectedPlacement && placementPart && !previewing && (
+              {selectedPlacement && placementPart && !previewing && !running && (
                 <>
                   <hr />
                   <div className="panel-heading">
@@ -952,9 +978,15 @@ export default function App() {
                   </div>
                   <button
                     className="full"
-                    onClick={() => changePlacement({ flipped: !selectedPlacement.flipped })}
+                    onClick={() =>
+                      changePlacement({
+                        rotation: ((selectedPlacement.rotation +
+                          (placementPart.direction === 'either' ? 90 : 180)) %
+                          360) as Placement['rotation'],
+                      })
+                    }
                   >
-                    Um 180° drehen ↻
+                    Um {placementPart.direction === 'either' ? 90 : 180}° drehen ↻
                   </button>
                   <button
                     className="text-button full"

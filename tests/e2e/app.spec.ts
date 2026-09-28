@@ -81,7 +81,7 @@ test('vollständiger Ablauf: anordnen, manuell ändern, rückgängig, speichern 
   const saved = JSON.parse(await readFile(path!, 'utf8'));
   expect(saved.placements).toHaveLength(2);
   expect(saved.placements[0].y).toBe(40);
-  expect(saved.placements[0].flipped).toBe(true);
+  expect(saved.placements[0].rotation).toBe(180);
   await page.reload();
   await expect(page.getByTestId('required-length')).toHaveText('660 mm');
   await expect(page.getByText('Vollständig & geprüft', { exact: true })).toBeVisible();

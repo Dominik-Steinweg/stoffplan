@@ -3,7 +3,7 @@ import { COLORS } from '../domain/model';
 import { reviewVariants } from '../optimization/variants';
 import { initGeometry } from '../geometry/kernel';
 
-function placements(value: unknown) {
+function placements(value: unknown, legacyRotation: boolean) {
   if (!Array.isArray(value) || value.length > 500)
     throw new Error('Ungültige Platzierungsliste (maximal 500 Exemplare).');
   for (const entry of value) {
@@ -12,7 +12,13 @@ function placements(value: unknown) {
     text(placement.partId);
     number(placement.x);
     number(placement.y);
-    if (typeof placement.flipped !== 'boolean') throw new Error('Ungültige Drehvariante.');
+    if (legacyRotation) {
+      if (typeof placement.flipped !== 'boolean') throw new Error('Ungültige Drehvariante.');
+      placement.rotation = placement.flipped ? 180 : 0;
+      delete placement.flipped;
+    }
+    if (![0, 90, 180, 270].includes(placement.rotation as number))
+      throw new Error('Ungültige Drehvariante.');
   }
 }
 
@@ -44,8 +50,11 @@ export function parseProject(raw: string): Project {
   }
   const p = object(parsed);
   const legacy = p.schemaVersion === 1;
-  if (!legacy && p.schemaVersion !== 2)
-    throw new Error('Diese Projektversion wird nicht unterstützt. Erwartet wird Version 1 oder 2.');
+  const legacyRotation = legacy || p.schemaVersion === 2;
+  if (!legacyRotation && p.schemaVersion !== 3)
+    throw new Error(
+      'Diese Projektversion wird nicht unterstützt. Erwartet wird Version 1, 2 oder 3.',
+    );
   text(p.id);
   text(p.name);
   text(p.updatedAt);
@@ -81,7 +90,7 @@ export function parseProject(raw: string): Project {
     count += part.quantity;
     if (
       typeof part.mirrored !== 'boolean' ||
-      !['straight', 'cross'].includes(part.direction as string)
+      !['straight', 'cross', 'either'].includes(part.direction as string)
     )
       throw new Error('Ungültige Ausrichtung.');
     const grain = object(part.grain);
@@ -122,7 +131,7 @@ export function parseProject(raw: string): Project {
   }
   if (count > 500)
     throw new Error('Maximal 500 Exemplare werden unterstützt; empfohlen sind bis zu 50.');
-  placements(p.placements);
+  placements(p.placements, legacyRotation);
   if (legacy) p.variants = [];
   if (!Array.isArray(p.variants) || p.variants.length > 10)
     throw new Error('Maximal zehn Anordnungsvarianten werden unterstützt.');
@@ -137,9 +146,9 @@ export function parseProject(raw: string): Project {
     )
       throw new Error('Ungültige Anordnungsvariante.');
     variantIds.add(variant.id);
-    placements(variant.placements);
+    placements(variant.placements, legacyRotation);
   }
-  p.schemaVersion = 2;
+  p.schemaVersion = 3;
   return parsed as Project;
 }
 export const serializeProject = (project: Project) => JSON.stringify(project, null, 2);
