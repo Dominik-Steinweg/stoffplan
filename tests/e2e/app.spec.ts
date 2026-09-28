@@ -220,6 +220,7 @@ test('Freie Form zeichnen, per Maus ändern und Zoom ohne Maßänderung', async 
   await expect(page.getByRole('textbox', { name: 'Formbreite', exact: true })).toHaveValue(width);
   const point = page.getByLabel('Punkt 1', { exact: true }),
     pointBox = (await point.boundingBox())!;
+  const originalX = (await point.getAttribute('cx'))!;
   await page.mouse.move(pointBox.x + pointBox.width / 2, pointBox.y + pointBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(
@@ -228,7 +229,7 @@ test('Freie Form zeichnen, per Maus ändern und Zoom ohne Maßänderung', async 
     { steps: 5 },
   );
   await page.mouse.up();
-  const x = await page.getByRole('textbox', { name: 'Punkt X', exact: true }).inputValue();
+  await expect(point).not.toHaveAttribute('cx', originalX);
   await page.getByRole('button', { name: 'Rückgängig', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Punkt X', exact: true })).not.toHaveValue(x);
+  await expect(point).toHaveAttribute('cx', originalX);
 });
